@@ -59,7 +59,18 @@
       @keyframes blink { 50% { opacity: 0; } }
       @media (max-width: 700px) { :root { --text-size: 22px; --tag-size: 17px; --small-size: 17px; } .box { padding: 24px 20px 28px; } }
 
-      /* questions (when added later) */
+      .test-page { max-width: 760px; }
+      .test-progress { color: #666; font-size: 15px; margin-bottom: 8px; }
+      .test-page h2 { font-size: 22px; line-height: 1.45; }
+      .test-option { display: block; margin: 12px 0; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
+      .test-option:hover { background: #f4f6f8; }
+      .test-option input { margin-right: 8px; }
+      .test-navigation { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
+      .test-navigation button { font-size: 17px; padding: 9px 20px; border: 1px solid #555; border-radius: 6px; background: #f5f5f5; cursor: pointer; }
+      .test-navigation button:disabled { opacity: .4; cursor: not-allowed; }
+      .test-navigation button:last-child { background: #173f8a; color: #fff; border-color: #173f8a; }
+      .test-error { color: #b00020; min-height: 1.4em; }
+      /* question layout */
       body .jspsych-survey-multi-choice-question { max-width: 700px; margin: 1.5em auto; text-align: left; }
       body .jspsych-survey-multi-choice-text { font-size: 20px; line-height: 1.55; margin-bottom: 0.8em; }
       body .jspsych-survey-multi-choice-option { font-size: 18px; line-height: 1.5; padding: 4px 0; }
@@ -140,27 +151,25 @@
       const groups = {};
       const itemRows = [];
       values.forEach(function (d) {
-        if (d.phase === 'vocab_pre' || d.phase === 'vocab_post' || d.phase === 'comprehension') {
-          const group = d.phase === 'comprehension' ? 'comprehension_segment_' + d.segment : d.phase;
-          if (!groups[group]) groups[group] = { phase: group, trials: 0, correct: 0 };
-          groups[group].trials += 1;
-          if (Number(d.correct) === 1) groups[group].correct += 1;
-          itemRows.push({
-            phase: d.phase, segment: d.segment || '',
-            item: d.word || d.item || '',
-            response: d.response ? JSON.stringify(d.response) : '',
-            correct: d.correct,
-            reaction_time_ms: d.rt,
-            option_order: d.option_order || ''
+        if (Array.isArray(d.response_items)) {
+          d.response_items.forEach(function (item) {
+            const group = item.phase === 'comprehension' ? 'comprehension_segment_' + item.segment : item.phase;
+            if (!groups[group]) groups[group] = { phase: group, trials: 0, correct: 0 };
+            groups[group].trials += 1;
+            if (Number(item.correct) === 1) groups[group].correct += 1;
+            itemRows.push({
+              phase: item.phase, segment: item.segment || '', item: item.word || item.item || '',
+              question_number: item.question_number, response: item.response || '',
+              correct: item.correct, reaction_time_ms: '', option_order: item.option_order || ''
+            });
           });
         }
       });
       const summary = Object.keys(groups).map(function (k) {
         const g = groups[k];
-        return {
-          phase: g.phase, total_items: g.trials, correct: g.correct,
-          accuracy_percent: g.trials ? Math.round(g.correct / g.trials * 10000) / 100 : 0
-        };
+        return { phase: g.phase, total_items: g.trials, correct: g.correct,
+          accuracy_percent: g.trials ? Math.round(g.correct / g.trials * 10000) / 100 : 0 };
+      });
       });
 
       if (typeof XLSX !== 'undefined') {
@@ -308,27 +317,81 @@
       };
     }
 
-    function questionTrial(q) {
-      const opts = SHUFFLE_OPTIONS ? jsPsych.randomization.shuffle(q.options.slice()) : q.options.slice();
-      const correctText = q.options[q.answer];
+    // A complete test section is one navigable trial, so participants can revisit
+    // earlier questions without navigating backward through the story.
+    function testBlockTrial(items, phase, firstQuestionNumber) {
+      const prepared = items.map(function (item, index) {
+        const options = jsPsych.randomization.shuffle(item.options.slice());
+        return {
+          item: item, options: options,
+          questionNumber: firstQuestionNumber + index,
+          prompt: phase === 'comprehension' ? item.prompt : item.word,
+          correctText: item.options[item.answer]
+        };
+      });
+      const responses = new Array(prepared.length).fill(null);
+      let current = 0;
+      function renderQuestion() {
+        const q = prepared[current];
+        const optionHtml = q.options.map(function (option, i) {
+          return '<label class="test-option"><input type="radio" name="test-answer" value="' + i + '"' +
+            (responses[current] === option ? ' checked' : '') + '> ' + esc(option) + '</label>';
+        }).join('');
+        const section = phase === 'comprehension' ? 'Reading comprehension' :
+          (phase === 'vocab_pre' ? 'Vocabulary pre-test' : 'Vocabulary post-test');
+        const total = phase === 'comprehension' ? QUESTIONS.length : VOCAB_ITEMS.length;
+        return '<div class="info test-page"><p class="test-progress">' + section +
+          ' &middot; Question ' + q.questionNumber + ' of ' + total + '</p><h2>' +
+          q.questionNumber + '. ' + esc(q.prompt) + '</h2><form id="test-question-form">' + optionHtml +
+          '</form><p class="test-navigation"><button type="button" id="test-back"' +
+          (current === 0 ? ' disabled' : '') + '>Back</button><button type="button" id="test-next">' +
+          (current === prepared.length - 1 ? 'Finish section' : 'Next') +
+          '</button></p><p class="test-error" id="test-error" aria-live="polite"></p></div>';
+      }
       return {
-        type: jsPsychSurveyMultiChoice,
-        questions: [{ prompt: q.prompt, name: q.id, options: opts, required: true }],
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: '<div id="test-block-root"></div>',
+        choices: 'NO_KEYS',
         on_start: function () { setTheme('plain'); },
-        data: { phase: 'comprehension', segment: q.segment, item: q.id, option_order: opts.join(' | ') },
-        on_finish: function (data) { data.correct = (data.response[q.id] === correctText) ? 1 : 0; }
-      };
-    }
-
-    function vocabTrial(item, phase) {
-      const opts = jsPsych.randomization.shuffle(item.options.slice());
-      const correctText = item.options[item.answer];
-      return {
-        type: jsPsychSurveyMultiChoice,
-        questions: [{ prompt: item.word, name: item.word, options: opts, required: true }],
-        on_start: function () { setTheme('plain'); },
-        data: { phase: phase, word: item.word, option_order: opts.join(' | ') },
-        on_finish: function (data) { data.correct = (data.response[item.word] === correctText) ? 1 : 0; }
+        on_load: function () {
+          const root = document.getElementById('test-block-root');
+          function draw() {
+            root.innerHTML = renderQuestion();
+            document.getElementById('test-back').addEventListener('click', function () {
+              const checked = root.querySelector('input[name="test-answer"]:checked');
+              if (checked) responses[current] = prepared[current].options[Number(checked.value)];
+              if (current > 0) { current--; draw(); }
+            });
+            document.getElementById('test-next').addEventListener('click', function () {
+              const checked = root.querySelector('input[name="test-answer"]:checked');
+              if (checked) responses[current] = prepared[current].options[Number(checked.value)];
+              if (!responses[current]) {
+                document.getElementById('test-error').textContent = 'Please select an answer before continuing.';
+                return;
+              }
+              if (current < prepared.length - 1) { current++; draw(); return; }
+              const responseItems = prepared.map(function (q, i) {
+                const comp = phase === 'comprehension';
+                return {
+                  phase: phase, segment: q.item.segment || '',
+                  item: comp ? q.item.id : q.item.word,
+                  word: comp ? '' : q.item.word,
+                  question_number: q.questionNumber,
+                  response: responses[i],
+                  correct: responses[i] === q.correctText ? 1 : 0,
+                  option_order: q.options.join(' | ')
+                };
+              });
+              jsPsych.finishTrial({
+                phase: phase, response_items: responseItems,
+                item_count: responseItems.length,
+                correct_count: responseItems.filter(function (x) { return x.correct === 1; }).length
+              });
+            });
+          }
+          draw();
+        },
+        data: { phase: phase, question_count: prepared.length }
       };
     }
 
@@ -360,12 +423,13 @@
     // ---------- 5. Timeline ----------
     const timeline = [];
 
-    // Welcome / study statement   (TODO: replace the bracketed placeholders with the approved wording)
+    // Welcome / study statement. Add the formal ethics approval number and date once issued.
     timeline.push(infoScreen(
-      '<h2>[Study title]</h2>' +
+      '<h2>Visual Novel Games for Vocabulary and Reading Development in L2 Learning</h2>' +
       '<p>Thank you for taking part. You will first complete a vocabulary check. You will then experience the story in the format assigned to you and answer questions after each section. Finally, you will complete the vocabulary check again.</p>' +
       '<p>Participation is voluntary. Please read the participant information provided by the researcher and ask any questions before beginning.</p>' +
-      '<p class="note">[Researcher name, department, contact e-mail] &middot; [Ethics approval number and date]</p>' +
+      '<p class="note">Keyan Li, Graduate School of Media and Governance, Keio University &middot; keyan.li@keio.jp</p>' +
+      '<p class="note">Ethics approval number and date: To be added after formal approval.</p>' +
       '<p>Press SPACE to continue only if you have read the information and agreed to participate.</p>'));
 
     // Participant ID  (type the ID and press ENTER; pre-filled if the web address ends with ?pid=P01)
@@ -397,8 +461,9 @@
 
     // Vocabulary pre-test (only when items exist)
     if (VOCAB_ITEMS.length) {
-      timeline.push(infoScreen('<p>First, a short vocabulary check. For each word, choose the closest meaning. Guess if you are not sure &mdash; there is no penalty for guessing.</p>'));
-      jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()).forEach(function (item) { timeline.push(vocabTrial(item, 'vocab_pre')); });
+      timeline.push(infoScreen('<p>First, a short vocabulary check. For each word, choose the closest meaning.</p>' +
+        '<p>Please answer honestly based on what you actually know. Do not look up words or use a dictionary. If you are unsure or do not know the answer, it is okay to make your best guess.</p>'));
+      timeline.push(testBlockTrial(jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()), 'vocab_pre', 1));
     }
 
     timeline.push(characterListTrial());
@@ -406,20 +471,21 @@
     const nSeg = Object.keys(segments).length;
     timeline.push(infoScreen(
       '<p>You will read a story in ' + nSeg + ' parts. Each screen presents part of the story and what the characters say or do. ' +
-      'Read it at your own pace and press SPACE to continue reading. You cannot go back to earlier text.</p>' +
+      'Read it at your own pace and press SPACE to continue reading. You cannot go back to earlier text. During each test section, you can use Back to return to the previous question.</p>' +
       (QUESTIONS.length ? '<p>After each part you will answer some questions.</p>' : '')));
 
     Object.keys(segments).map(Number).sort(function (a, b) { return a - b; }).forEach(function (seg) {
       buildScreens(segments[seg]).forEach(function (s, i) { timeline.push(screenTrial(s, seg, i)); });
       const qs = QUESTIONS.filter(function (q) { return q.segment === seg; });
       timeline.push(infoScreen('<p>End of part ' + seg + '.' + (qs.length ? ' Please answer the following questions.' : '') + '</p>'));
-      qs.forEach(function (q) { timeline.push(questionTrial(q)); });
+      if (qs.length) timeline.push(testBlockTrial(qs, 'comprehension', QUESTIONS.indexOf(qs[0]) + 1));
     });
 
     // Vocabulary post-test (only when items exist)
     if (VOCAB_ITEMS.length) {
-      timeline.push(infoScreen('<p>One more vocabulary check, same format as before.</p>'));
-      jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()).forEach(function (item) { timeline.push(vocabTrial(item, 'vocab_post')); });
+      timeline.push(infoScreen('<p>One more vocabulary check, same format as before.</p>' +
+        '<p>Please answer honestly based on what you actually know. Do not look up words or use a dictionary. If you are unsure or do not know the answer, it is okay to make your best guess.</p>'));
+      timeline.push(testBlockTrial(jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()), 'vocab_post', 1));
     }
 
     timeline.push(infoScreen('<p>Thank you. Your responses will now be downloaded.</p>'));
