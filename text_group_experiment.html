@@ -170,7 +170,6 @@
         return { phase: g.phase, total_items: g.trials, correct: g.correct,
           accuracy_percent: g.trials ? Math.round(g.correct / g.trials * 10000) / 100 : 0 };
       });
-      });
 
       if (typeof XLSX !== 'undefined') {
         const wb = XLSX.utils.book_new();
