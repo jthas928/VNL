@@ -87,13 +87,17 @@
 
     let pid = new URLSearchParams(window.location.search).get('pid') || '';
 
-    // Create one unique upload filename per browser session. The participant ID
-    // is entered later in the experiment, so it cannot be used at initialization.
-    const uploadFileName = 'text_' + (
-      (window.crypto && window.crypto.randomUUID)
+    // DataPipe accepts a filename function. The participant enters their
+    // pseudonymous study ID later, so resolve the filename when the experiment ends.
+    // A random suffix prevents duplicate submissions if an ID is reused.
+    const uploadFileName = function () {
+      const participantCode = String(pid || '').trim().replace(/[^A-Za-z0-9_-]/g, '_');
+      if (!participantCode) throw new Error('Participant ID is not available yet.');
+      const uniqueSuffix = (window.crypto && window.crypto.randomUUID)
         ? window.crypto.randomUUID()
-        : (Date.now() + '_' + Math.random().toString(36).slice(2))
-    ) + '.csv';
+        : (Date.now() + '_' + Math.random().toString(36).slice(2));
+      return 'text_' + participantCode + '_' + uniqueSuffix + '.csv';
+    };
 
     // Replace this placeholder with the 12-character Experiment ID from DataPipe.
     const DATAPIPE_EXPERIMENT_ID = 'SJjYC8eXFyU2';
