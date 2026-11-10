@@ -637,7 +637,7 @@ const QUESTIONS = [
       "A private detective hired by someone else",
       "A burglar pretending to be a salesman"
     ],
-    "answer": 1
+    "answer": 3
   },
   {
     "id": "A2-5",
