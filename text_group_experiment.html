@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Reading study (text group)</title>
+    <script src="jspsych/jspsych.js"></script>
+    <script src="jspsych/plugin-html-keyboard-response.js"></script>
+    <script src="jspsych/plugin-survey-multi-choice.js"></script>
+    <script src="jspsych/extension-pipe.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <script src="material_data.js"></script>
+    <style>
+      /* Optional display font. If the file is missing, the browser uses the fallback fonts below. */
+      @font-face { font-family: 'AceAttorney'; src: url('fonts/AceAttorney.ttf') format('truetype'); font-display: swap; }
+      :root { --game-font: 'AceAttorney', 'Trebuchet MS', Verdana, 'Segoe UI', Arial, sans-serif;
+              --text-size: 30px; --tag-size: 22px; --small-size: 21px; }
+
+      body { margin: 0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; background: #fff; color: #111; }
+      body.game { background: #070b18; color: #fff; }
+      body .jspsych-content-wrapper { min-height: 100vh; }
+      body .jspsych-content { max-width: 100%; }
+
+      /* ---------- plain pages (welcome, ID, instructions) ---------- */
+      .info { max-width: 680px; margin: 0 auto; text-align: left; line-height: 1.6; font-size: 20px; }
+      .info h2 { margin-top: 0; }
+      .info .note { color: #666; font-size: 15px; }
+      .info input[type=text] { font-size: 22px; padding: 8px 12px; width: 260px; border: 2px solid #555; border-radius: 6px; }
+      .info .err { color: #b00020; }
+      .hint { margin-top: 18px; font-size: 15px; color: #888; text-align: center; }
+      body.game .hint { color: #7c88aa; }
+
+      /* ---------- game-style dialogue boxes ---------- */
+      .screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .box { position: relative; width: min(92vw, 900px); box-sizing: border-box; text-align: left;
+             background: #0d1b45; border: 3px solid #d7def0; border-radius: 6px;
+             padding: 30px 36px 34px; min-height: 190px; font-family: var(--game-font); font-weight: 700;
+             font-size: var(--text-size); line-height: 1.5; letter-spacing: .2px; color: #fff;
+             animation: pop .14s ease-out; }
+      .box p { margin: 0 0 .75em; }
+      .box p:last-child { margin-bottom: 0; }
+      .box.talk::after { content: '\25BC'; position: absolute; right: 18px; bottom: 8px; font-size: 16px; color: #aab6dd; animation: blink 1s steps(2) infinite; }
+      .nametag { position: absolute; left: 22px; top: -20px; background: #2556b8; border: 2px solid #d7def0; border-radius: 5px;
+                 padding: 2px 16px 3px; font-size: var(--tag-size); line-height: 1.35; color: #fff; }
+      .box.talk { padding-top: 40px; }
+      .box.header { min-height: 0; text-align: center; font-size: var(--small-size); letter-spacing: 1.5px; font-weight: 600; padding: 24px 30px; }
+      .box.header div { margin: 4px 0; }
+      .box.act { text-align: center; color: #ffe27a; display: flex; align-items: center; justify-content: center; }
+      .box.sys, .box.plain { font-weight: 600; }
+      .box.sys { text-align: center; font-style: italic; color: #c8d2f0; min-height: 0; padding: 26px 30px; }
+      .stage { font-style: italic; color: #b9c5ea; }
+      .preface { width: min(92vw, 900px); display: flex; flex-direction: column; gap: 14px; }
+      .preface-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .preface-item { box-sizing: border-box; background: #0d1b45; border: 2px solid #d7def0; border-radius: 6px;
+                      padding: 16px 20px; color: #fff; font-family: var(--game-font); font-size: 20px; line-height: 1.45; }
+      .preface-item strong { display: block; margin-bottom: 6px; color: #ffe27a; }
+      @media (max-width: 700px) { .preface-list { grid-template-columns: 1fr; } .preface-item { font-size: 18px; } }
+      @keyframes pop { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      @keyframes blink { 50% { opacity: 0; } }
+      @media (max-width: 700px) { :root { --text-size: 22px; --tag-size: 17px; --small-size: 17px; } .box { padding: 24px 20px 28px; } }
+
+      /* questions (when added later) */
+      body .jspsych-survey-multi-choice-question { max-width: 700px; margin: 1.5em auto; text-align: left; }
+      body .jspsych-survey-multi-choice-text { font-size: 20px; line-height: 1.55; margin-bottom: 0.8em; }
+      body .jspsych-survey-multi-choice-option { font-size: 18px; line-height: 1.5; padding: 4px 0; }
+    </style>
+  </head>
+  <body></body>
+  <script>
+    /* ===================== settings you may want to change ===================== */
+    const SHUFFLE_OPTIONS = true;      // randomize answer order for each participant (used when questions are added)
+    const MAX_CHARS_PER_BOX = 130;     // a longer speech is moved on to the next box, at sentence ends
+    const MAX_SENTENCES_PER_BOX = 3;
+    const HIDE_ACTIONS = ['Press'];    // gameplay prompts are not displayed in the linear reading version
+    /* =========================================================================== */
+
+    let pid = new URLSearchParams(window.location.search).get('pid') || '';
+
+    // Create one unique upload filename per browser session. The participant ID
+    // is entered later in the experiment, so it cannot be used at initialization.
+    const uploadFileName = 'text_' + (
+      (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : (Date.now() + '_' + Math.random().toString(36).slice(2))
+    ) + '.csv';
+
+    // Replace this placeholder with the 12-character Experiment ID from DataPipe.
+    const DATAPIPE_EXPERIMENT_ID = 'SJjYC8eXFyU2';
+    const DATAPIPE_CONFIGURED =
+      /^[A-Za-z0-9_-]{12}$/.test(DATAPIPE_EXPERIMENT_ID) &&
+      DATAPIPE_EXPERIMENT_ID !== 'REPLACE_WITH_DATAPIPE_EXPERIMENT_ID';
+
+    const jsPsych = initJsPsych({
+      extensions: DATAPIPE_CONFIGURED ? [{
+        type: jsPsychExtensionPipe,
+        params: {
+          experiment_id: DATAPIPE_EXPERIMENT_ID,
+          filename: uploadFileName,
+          format: 'csv',
+          stream: true,
+          wait_message: '<p>Please wait while your responses are being saved. Do not close this page.</p>',
+          done_message: '<p>Your responses have been saved. You may now close this page.</p>',
+          on_save: function (result) {
+            if (!result || !result.ok) {
+              // Local XLSX fallback if the remote upload fails.
+              exportWorkbook(jsPsych, 'text_only', pid);
+              const display = jsPsych.getDisplayElement();
+              if (display) {
+                display.innerHTML = '<div class="info"><h2>Data upload issue</h2><p>Your responses could not be confirmed as uploaded. A backup file should download automatically. Please keep it and contact the researcher.</p></div>';
+              }
+            }
+          }
+        }
+      }] : [],
+      on_finish: function () {
+        jsPsych.data.get().addToAll({ participant: pid, condition: 'text_only' });
+        if (!DATAPIPE_CONFIGURED) {
+          // Before DataPipe is configured, keep the existing local-download behavior
+          // for pilot testing. Do not recruit participants with this setting.
+          exportWorkbook(jsPsych, 'text_only', pid);
+        }
+      }
+    });
+    jsPsych.data.addProperties({ condition: 'text_only' });
+
+
+    function exportWorkbook(jsPsych, condition, participantId) {
+      const values = jsPsych.data.get().values();
+      const rows = values.map(function (d) {
+        const row = {};
+        Object.keys(d).forEach(function (k) {
+          const v = d[k];
+          row[k] = (v && typeof v === 'object') ? JSON.stringify(v) : v;
+        });
+        row.participant = participantId;
+        row.condition = condition;
+        return row;
+      });
+
+      const groups = {};
+      const itemRows = [];
+      values.forEach(function (d) {
+        if (d.phase === 'vocab_pre' || d.phase === 'vocab_post' || d.phase === 'comprehension') {
+          const group = d.phase === 'comprehension' ? 'comprehension_segment_' + d.segment : d.phase;
+          if (!groups[group]) groups[group] = { phase: group, trials: 0, correct: 0 };
+          groups[group].trials += 1;
+          if (Number(d.correct) === 1) groups[group].correct += 1;
+          itemRows.push({
+            phase: d.phase, segment: d.segment || '',
+            item: d.word || d.item || '',
+            response: d.response ? JSON.stringify(d.response) : '',
+            correct: d.correct,
+            reaction_time_ms: d.rt,
+            option_order: d.option_order || ''
+          });
+        }
+      });
+      const summary = Object.keys(groups).map(function (k) {
+        const g = groups[k];
+        return {
+          phase: g.phase, total_items: g.trials, correct: g.correct,
+          accuracy_percent: g.trials ? Math.round(g.correct / g.trials * 10000) / 100 : 0
+        };
+      });
+
+      if (typeof XLSX !== 'undefined') {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'RawData');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemRows), 'TestResponses');
+        XLSX.writeFile(wb, condition + '_' + (participantId || 'unknown') + '_results.xlsx');
+      } else {
+        const csv = jsPsych.data.get().ignore(['stimulus']).csv();
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = condition + '_' + (participantId || 'unknown') + '_results.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        alert('The Excel library could not be loaded. A CSV backup has been downloaded instead.');
+      }
+    }
+
+    function setTheme(mode) { document.body.classList.toggle('game', mode === 'game'); }
+
+    // ---------- 1. Parse RAW_TEXT into segments ----------
+    const SPEAKERS = ['Phoenix', 'Mia', 'Butz', 'Payne', 'Judge', 'Sahwit', 'Alarm Clock', '???'];
+    // Full names shown on the name tag (RAW_TEXT keeps the short tags above)
+    const DISPLAY_NAMES = {
+      'Phoenix': 'Phoenix Wright', 'Butz': 'Larry Butz', 'Mia': 'Mia Fey', 'Sahwit': 'Frank Sahwit',
+      'Payne': 'Winston Payne', 'Judge': 'Judge', 'Alarm Clock': 'Alarm Clock', '???': '???'
+    };
+
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function fmt(s) {
+      return esc(s)
+        .replace(/\[[^\]]*\]/g, function (m) { return '<span class="stage">' + m + '</span>'; })   // [stage directions]
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');                                                  // *gasp*
+    }
+
+    function parseText(raw) {
+      const segs = {};
+      let cur = null;
+      raw.split('\n').forEach(function (line) {
+        line = line.trim();
+        if (!line) return;
+        const m = line.match(/^=== SEGMENT (\d+) ===$/);
+        if (m) { cur = Number(m[1]); segs[cur] = []; return; }
+        if (cur === null) return;
+        if (line.startsWith('##')) { segs[cur].push({ kind: 'header', text: line.replace(/^##\s*/, '') }); return; }
+        if (line.startsWith('#')) return;                                   // comment
+        if (line.startsWith('>> ')) {                                        // action choice
+          const a = line.slice(3).trim();
+          if (HIDE_ACTIONS.indexOf(a) === -1) segs[cur].push({ kind: 'act', text: a });
+          return;
+        }
+        for (const sp of SPEAKERS) {
+          if (line.startsWith(sp + ': ')) { segs[cur].push({ kind: 'line', speaker: sp, text: line.slice(sp.length + 2) }); return; }
+        }
+        segs[cur].push({ kind: 'plain', speaker: '', text: line });
+      });
+      return segs;
+    }
+
+    // ---------- 2. Split long speeches into several boxes ----------
+    function splitSentences(t) {
+      const s = t.replace(/\b(Mr|Ms|Mrs|Dr|No|St)\./g, '$1\u0001');
+      const out = []; let start = 0, m;
+      const re = /[.!?\u2026]+["\u201d')\]*]*(\s+)(?=["\u201c'(*\[]?[A-Z0-9])/g;
+      while ((m = re.exec(s)) !== null) {
+        out.push(s.slice(start, m.index + m[0].length - m[1].length));
+        start = m.index + m[0].length;
+      }
+      out.push(s.slice(start));
+      return out.map(function (x) { return x.replace(/\u0001/g, '.').trim(); }).filter(Boolean);
+    }
+    function splitLong(s) {                       // a single sentence that is itself too long
+      const out = []; let rest = s;
+      while (rest.length > MAX_CHARS_PER_BOX) {
+        let cut = -1, m;
+        const re = /[,;:\u2014]\s|\.\.\.\s|\s-\s/g;
+        while ((m = re.exec(rest)) !== null && m.index + m[0].length <= MAX_CHARS_PER_BOX) cut = m.index + m[0].length;
+        if (cut < MAX_CHARS_PER_BOX * 0.4) { cut = rest.lastIndexOf(' ', MAX_CHARS_PER_BOX); if (cut <= 0) cut = MAX_CHARS_PER_BOX; }
+        out.push(rest.slice(0, cut).trim()); rest = rest.slice(cut).trim();
+      }
+      if (rest) out.push(rest);
+      return out;
+    }
+    function paginate(text) {                      // -> array of boxes, each an array of sentences
+      const pages = []; let cur = [], len = 0;
+      const flush = function () { if (cur.length) pages.push(cur); cur = []; len = 0; };
+      splitSentences(text).forEach(function (sent) {
+        if (sent.length > MAX_CHARS_PER_BOX) {
+          flush();
+          splitLong(sent).forEach(function (piece) { pages.push([piece]); });
+          return;
+        }
+        if (cur.length && (len + sent.length + 1 > MAX_CHARS_PER_BOX || cur.length >= MAX_SENTENCES_PER_BOX)) flush();
+        cur.push(sent); len += sent.length + 1;
+      });
+      flush();
+      return pages;
+    }
+
+    // ---------- 3. Turn a segment into box-by-box screens ----------
+    function buildScreens(items) {
+      const screens = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === 'header') {                            // consecutive headings share one box
+          const lines = [it.text];
+          while (i + 1 < items.length && items[i + 1].kind === 'header') lines.push(items[++i].text);
+          screens.push({ kind: 'header', lines: lines, speaker: '', text: lines.join(' / ') });
+        } else if (it.kind === 'act') {
+          screens.push({ kind: 'act', speaker: '', text: it.text });
+        } else if (it.kind === 'sys') {
+          screens.push({ kind: 'sys', speaker: '', text: it.text });
+        } else {
+          const pages = paginate(it.text);
+          pages.forEach(function (sents, p) {
+            screens.push({ kind: it.kind, speaker: it.speaker, sents: sents, page: p + 1, pages: pages.length, text: sents.join(' ') });
+          });
+        }
+      }
+      return screens;
+    }
+
+    const segments = parseText(RAW_TEXT);
+
+    // ---------- 4. Trial builders ----------
+    function boxHtml(s) {
+      if (s.kind === 'header') return '<div class="box header">' + s.lines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') + '</div>';
+      if (s.kind === 'act') return '<div class="box act">' + esc(s.text) + '</div>';
+      if (s.kind === 'sys') return '<div class="box sys">' + esc(s.text) + '</div>';
+      const body = s.sents.map(function (x) { return '<p>' + fmt(x) + '</p>'; }).join('');
+      if (s.speaker) return '<div class="box talk"><div class="nametag">' + esc(DISPLAY_NAMES[s.speaker] || s.speaker) + '</div>' + body + '</div>';
+      return '<div class="box plain talk">' + body + '</div>';
+    }
+
+    function screenTrial(s, seg, idx) {
+      return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: '<div class="screen">' + boxHtml(s) + '<div class="hint">Press SPACE to continue reading</div></div>',
+        choices: [' '],
+        on_start: function () { setTheme('game'); },
+        data: { phase: 'reading', segment: seg, screen: idx, kind: s.kind, speaker: s.speaker || '',
+                page: s.page || 1, pages: s.pages || 1, chars: s.text.length, text: s.text }   // rt = time on this box (ms)
+      };
+    }
+
+    function questionTrial(q) {
+      const opts = SHUFFLE_OPTIONS ? jsPsych.randomization.shuffle(q.options.slice()) : q.options.slice();
+      const correctText = q.options[q.answer];
+      return {
+        type: jsPsychSurveyMultiChoice,
+        questions: [{ prompt: q.prompt, name: q.id, options: opts, required: true }],
+        on_start: function () { setTheme('plain'); },
+        data: { phase: 'comprehension', segment: q.segment, item: q.id, option_order: opts.join(' | ') },
+        on_finish: function (data) { data.correct = (data.response[q.id] === correctText) ? 1 : 0; }
+      };
+    }
+
+    function vocabTrial(item, phase) {
+      const opts = jsPsych.randomization.shuffle(item.options.slice());
+      const correctText = item.options[item.answer];
+      return {
+        type: jsPsychSurveyMultiChoice,
+        questions: [{ prompt: item.word, name: item.word, options: opts, required: true }],
+        on_start: function () { setTheme('plain'); },
+        data: { phase: phase, word: item.word, option_order: opts.join(' | ') },
+        on_finish: function (data) { data.correct = (data.response[item.word] === correctText) ? 1 : 0; }
+      };
+    }
+
+    function infoScreen(html) {
+      return { type: jsPsychHtmlKeyboardResponse,
+               stimulus: '<div class="info">' + html + '</div><p class="hint">Press SPACE to continue reading</p>',
+               choices: [' '], on_start: function () { setTheme('plain'); }, data: { phase: 'info' } };
+    }
+
+
+    function characterListTrial() {
+      return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus:
+          '<div class="screen"><div class="preface">' +
+          '<div class="box header"><div>DRAMATIS PERSONAE</div><div>Characters in This Case</div></div>' +
+          '<div class="preface-list">' +
+          '<div class="preface-item"><strong>Winston Payne (Age: 52)</strong>The prosecutor for this case. Lacks presence. Generally bad at getting his points across.</div>' +
+          '<div class="preface-item"><strong>Mia Fey (Age: 27)</strong>Chief Attorney at Fey &amp; Co. My boss, and a very good defense attorney.</div>' +
+          '<div class="preface-item"><strong>Larry Butz (Age: 23)</strong>The defendant in this case. A likeable guy who has been my friend since grade school.</div>' +
+          '<div class="preface-item"><strong>Cindy Stone (Age: 22)</strong>The victim in this case. A model, she lived in an apartment by herself.</div>' +
+          '</div><div class="hint">Press SPACE to continue reading</div></div></div>',
+        choices: [' '],
+        on_start: function () { setTheme('game'); },
+        data: { phase: 'reading_preface', kind: 'dramatis_personae' }
+      };
+    }
+
+    // ---------- 5. Timeline ----------
+    const timeline = [];
+
+    // Welcome / study statement   (TODO: replace the bracketed placeholders with the approved wording)
+    timeline.push(infoScreen(
+      '<h2>[Study title]</h2>' +
+      '<p>Thank you for taking part. You will first complete a vocabulary check. You will then experience the story in the format assigned to you and answer questions after each section. Finally, you will complete the vocabulary check again.</p>' +
+      '<p>Participation is voluntary. Please read the participant information provided by the researcher and ask any questions before beginning.</p>' +
+      '<p class="note">[Researcher name, department, contact e-mail] &middot; [Ethics approval number and date]</p>' +
+      '<p>Press SPACE to continue only if you have read the information and agreed to participate.</p>'));
+
+    // Participant ID  (type the ID and press ENTER; pre-filled if the web address ends with ?pid=P01)
+    let idTries = 0;
+    const idTrial = {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: function () {
+        idTries++;
+        return '<div class="info"><p>Please enter the participant ID given to you by the researcher.</p>' +
+          '<p><input type="text" id="pid-input" autocomplete="off" /></p>' +
+          (idTries > 1 ? '<p class="err">Please enter an ID before continuing.</p>' : '') +
+          '<p class="hint">Type your ID, then press ENTER</p></div>';
+      },
+      choices: ['Enter'],
+      on_start: function () { setTheme('plain'); },
+      on_load: function () {
+        const box = document.getElementById('pid-input');
+        if (!box) return;
+        if (pid) box.value = pid;
+        box.focus();
+        pid = box.value;
+        box.addEventListener('input', function () { pid = box.value.trim(); });
+      },
+      data: { phase: 'participant_id' }
+    };
+    timeline.push({ timeline: [idTrial], loop_function: function () { return !pid.trim(); } });
+    timeline.push({ type: jsPsychHtmlKeyboardResponse, stimulus: '', choices: 'NO_KEYS', trial_duration: 1,
+                    on_start: function () { pid = pid.trim(); jsPsych.data.addProperties({ participant: pid }); }, data: { phase: 'setup' } });
+
+    // Vocabulary pre-test (only when items exist)
+    if (VOCAB_ITEMS.length) {
+      timeline.push(infoScreen('<p>First, a short vocabulary check. For each word, choose the closest meaning. Guess if you are not sure &mdash; there is no penalty for guessing.</p>'));
+      jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()).forEach(function (item) { timeline.push(vocabTrial(item, 'vocab_pre')); });
+    }
+
+    timeline.push(characterListTrial());
+
+    const nSeg = Object.keys(segments).length;
+    timeline.push(infoScreen(
+      '<p>You will read a story in ' + nSeg + ' parts. Each screen presents part of the story and what the characters say or do. ' +
+      'Read it at your own pace and press SPACE to continue reading. You cannot go back to earlier text.</p>' +
+      (QUESTIONS.length ? '<p>After each part you will answer some questions.</p>' : '')));
+
+    Object.keys(segments).map(Number).sort(function (a, b) { return a - b; }).forEach(function (seg) {
+      buildScreens(segments[seg]).forEach(function (s, i) { timeline.push(screenTrial(s, seg, i)); });
+      const qs = QUESTIONS.filter(function (q) { return q.segment === seg; });
+      timeline.push(infoScreen('<p>End of part ' + seg + '.' + (qs.length ? ' Please answer the following questions.' : '') + '</p>'));
+      qs.forEach(function (q) { timeline.push(questionTrial(q)); });
+    });
+
+    // Vocabulary post-test (only when items exist)
+    if (VOCAB_ITEMS.length) {
+      timeline.push(infoScreen('<p>One more vocabulary check, same format as before.</p>'));
+      jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()).forEach(function (item) { timeline.push(vocabTrial(item, 'vocab_post')); });
+    }
+
+    timeline.push(infoScreen('<p>Thank you. Your responses will now be downloaded.</p>'));
+    jsPsych.run(timeline);
+  </script>
+</html>
