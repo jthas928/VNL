@@ -154,25 +154,45 @@
 
       const groups = {};
       const itemRows = [];
+      function ensureGroup(key) {
+        if (!groups[key]) groups[key] = {
+          phase: key, total_items: 0, correct: 0, duration_ms: 0
+        };
+        return groups[key];
+      }
+
       values.forEach(function (d) {
+        if (d.phase === 'reading') {
+          const key = 'reading_segment_' + d.segment;
+          ensureGroup(key).duration_ms += Number(d.rt || 0);
+        }
         if (Array.isArray(d.response_items)) {
+          const group = d.phase === 'comprehension'
+            ? 'comprehension_segment_' + d.segment : d.phase;
+          const g = ensureGroup(group);
+          g.duration_ms += Number(d.rt || 0);
           d.response_items.forEach(function (item) {
-            const group = item.phase === 'comprehension' ? 'comprehension_segment_' + item.segment : item.phase;
-            if (!groups[group]) groups[group] = { phase: group, trials: 0, correct: 0 };
-            groups[group].trials += 1;
-            if (Number(item.correct) === 1) groups[group].correct += 1;
+            g.total_items += 1;
+            if (Number(item.correct) === 1) g.correct += 1;
             itemRows.push({
-              phase: item.phase, segment: item.segment || '', item: item.word || item.item || '',
+              phase: item.phase, segment: item.segment || '',
+              item: item.word || item.item || '',
               question_number: item.question_number, response: item.response || '',
-              correct: item.correct, reaction_time_ms: '', option_order: item.option_order || ''
+              correct: item.correct === undefined ? '' : item.correct,
+              reaction_time_ms: '', option_order: item.option_order || ''
             });
           });
         }
       });
-      const summary = Object.keys(groups).map(function (k) {
-        const g = groups[k];
-        return { phase: g.phase, total_items: g.trials, correct: g.correct,
-          accuracy_percent: g.trials ? Math.round(g.correct / g.trials * 10000) / 100 : 0 };
+
+      const summary = Object.keys(groups).map(function (key) {
+        const g = groups[key];
+        return {
+          phase: g.phase, total_items: g.total_items, correct: g.correct,
+          accuracy_percent: g.total_items
+            ? Math.round(g.correct / g.total_items * 10000) / 100 : '',
+          duration_ms: Math.round(g.duration_ms)
+        };
       });
 
       if (typeof XLSX !== 'undefined') {
