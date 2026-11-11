@@ -462,7 +462,7 @@ const QUESTIONS = [
   {
     "id": "A2-1",
     "segment": 1,
-    "prompt": "The opening monologue, spoken before the story moves to court, conveys what about the speaker's emotional state?",
+    "prompt": "The opening monologue, spoken before the story moves to court, conveys what about the murderer's emotional state?",
     "options": [
       "Excited, because everything is going according to plan",
       "Angry at someone else for causing the problem",
@@ -474,26 +474,14 @@ const QUESTIONS = [
   {
     "id": "A2-2",
     "segment": 1,
-    "prompt": "When Larry first appears, he shouts that he did it, begs for the death sentence, and says he cannot live without his girlfriend. How would you describe his behavior?",
+    "prompt": "When Larry first appears, he loudly says that he is guilty and demands the death sentence. How would you best describe his behavior?",
     "options": [
-      "Calm, but quietly troubled underneath",
-      "Seriously admitting to the crime",
-      "Overly dramatic, exaggerating how bad things are",
-      "Withdrawn and unwilling to talk about what happened"
+      "Calm and serious, carefully explaining what happened",
+      "Truly sorry and willing to accept the blame",
+      "Very emotional and dramatic, making the situation seem worse than it is",
+      "Nervous and defensive, trying to avoid taking responsibility"
     ],
     "answer": 2
-  },
-  {
-    "id": "A3-4",
-    "segment": 1,
-    "prompt": "When Phoenix cannot remember the name of the woman who was killed, Mia says she feels a migraine coming on and begs him to check the case file. What does Mia's reaction suggest?",
-    "options": [
-      "She doubts that Phoenix is ready for court",
-      "She is amused by Phoenix's mistake",
-      "She is angry that Larry did not tell Phoenix the name",
-      "She thinks the question was unfair"
-    ],
-    "answer": 0
   },
   {
     "id": "A3-7",
@@ -504,6 +492,18 @@ const QUESTIONS = [
       "He is deeply shocked by Larry's words",
       "He thinks Larry should be punished",
       "He is angry at Mia for asking"
+    ],
+    "answer": 0
+  },
+  {
+    "id": "A3-4",
+    "segment": 1,
+    "prompt": "When Phoenix cannot remember the name of the woman who was killed, Mia says she feels a migraine coming on and begs him to check the case file. What does Mia's reaction suggest?",
+    "options": [
+      "She doubts that Phoenix is ready for court",
+      "She is amused by Phoenix's mistake",
+      "She is angry that Larry did not tell Phoenix the name",
+      "She thinks the question was unfair"
     ],
     "answer": 0
   },
@@ -536,7 +536,7 @@ const QUESTIONS = [
     "segment": 2,
     "prompt": "Who did Sahwit say he saw running out of the apartment?",
     "options": [
-      "Larry, Phoenix's client",
+      "Phoenix's client",
       "A stranger he did not recognize",
       "Another resident of the building",
       "A police officer"
@@ -628,18 +628,6 @@ const QUESTIONS = [
     "answer": 0
   },
   {
-    "id": "A1-6",
-    "segment": 3,
-    "prompt": "What was Sahwit's real occupation?",
-    "options": [
-      "A newspaper reporter",
-      "A security guard for the building",
-      "A private detective hired by someone else",
-      "A burglar pretending to be a salesman"
-    ],
-    "answer": 3
-  },
-  {
     "id": "A2-5",
     "segment": 3,
     "prompt": "The court says Phoenix cannot prove the clock was slow on the day of the murder, so the questioning ends. How does Phoenix feel at this moment?",
@@ -650,18 +638,6 @@ const QUESTIONS = [
       "Sure that the court will soon change its mind"
     ],
     "answer": 1
-  },
-  {
-    "id": "A2-6",
-    "segment": 3,
-    "prompt": "After the court clears him, Larry keeps saying \"My life is over...\" Why does he still feel this way?",
-    "options": [
-      "He thinks Payne will bring a new case against him",
-      "He is angry that Phoenix did not win faster",
-      "He is still very sad about losing Cindy",
-      "He is afraid that Sahwit will escape"
-    ],
-    "answer": 2
   },
   {
     "id": "A3-3",
@@ -712,12 +688,48 @@ const QUESTIONS = [
     "answer": 1
   },
   {
+    "id": "A1-6",
+    "segment": 3,
+    "prompt": "What was Sahwit's real occupation?",
+    "options": [
+      "A newspaper reporter",
+      "A security guard for the building",
+      "A private detective hired by someone else",
+      "A burglar pretending to be a salesman"
+    ],
+    "answer": 3
+  },
+  {
+    "id": "A1-10",
+    "segment": 3,
+    "prompt": "How did the case end for Larry?",
+    "options": [
+      "He was sent to prison for a short time",
+      "He was cleared of the crime",
+      "The court postponed its decision",
+      "He was fined but allowed to go home"
+    ],
+    "answer": 1
+  },
+  {
+    "id": "A2-6",
+    "segment": 3,
+    "prompt": "After the court clears him, Larry keeps saying \"My life is over...\" Why does he still feel this way?",
+    "options": [
+      "He thinks Payne will bring a new case against him",
+      "He is angry that Phoenix did not win faster",
+      "He is still very sad about losing Cindy",
+      "He is afraid that Sahwit will escape"
+    ],
+    "answer": 2
+  },
+  {
     "id": "A4-5",
     "segment": 3,
     "prompt": "At the end, Mia says lawyers can never be sure whether their clients are innocent, and that all they can do is believe in them. What is her main point?",
     "options": [
-      "Lawyers should believe their clients, whatever the evidence shows",
-      "Believing in a client matters, even without certainty",
+      "Lawyers should always trust their clients and set aside the evidence",
+      "Lawyers should support their clients even when they cannot be sure they are innocent",
       "Phoenix should not have taken Larry's case without proof",
       "The law can never find out the truth about a case"
     ],
@@ -750,9 +762,9 @@ const VOCAB_ITEMS = [
   {
     "word": "favor",
     "options": [
-      "kindness",
-      "payment",
-      "rule"
+      "A kind act",
+      "A payment",
+      "An opinion"
     ],
     "answer": 0
   },
