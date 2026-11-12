@@ -117,11 +117,11 @@
           done_message: '<p>Your responses have been saved. You may now close this page.</p>',
           on_save: function (result) {
             if (!result || !result.ok) {
-              // Local XLSX fallback if the remote upload fails.
-              exportWorkbook(jsPsych, 'text_only', pid);
+              // Do not download participant data to the participant's device.
+              // The researcher must check DataPipe and arrange a supervised recovery if needed.
               const display = jsPsych.getDisplayElement();
               if (display) {
-                display.innerHTML = '<div class="info"><h2>Data upload issue</h2><p>Your responses could not be confirmed as uploaded. A backup file should download automatically. Please keep it and contact the researcher.</p></div>';
+                display.innerHTML = '<div class="info"><h2>Data upload could not be confirmed</h2><p>Please do not close this page yet. Contact the researcher and provide your participant ID. Do not refresh or restart the experiment.</p></div>';
               }
             }
           }
@@ -511,7 +511,7 @@
       timeline.push(testBlockTrial(jsPsych.randomization.shuffle(VOCAB_ITEMS.slice()), 'vocab_post', 1));
     }
 
-    timeline.push(infoScreen('<p>Thank you. Your responses will now be downloaded.</p>'));
+    timeline.push(infoScreen('<p>Thank you. Your responses will now be saved securely. Please wait for the data-saving confirmation before closing this page.</p>'));
     jsPsych.run(timeline);
   </script>
 </html>
