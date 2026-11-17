@@ -49,6 +49,8 @@
       .box.act { text-align: center; color: #ffe27a; display: flex; align-items: center; justify-content: center; }
       .box.sys, .box.plain { font-weight: 600; }
       .box.sys { text-align: center; font-style: italic; color: #c8d2f0; min-height: 0; padding: 26px 30px; }
+      .box.long { font-size: 25px; }
+      .box.xlong { font-size: 21px; }
       .stage { font-style: italic; color: #b9c5ea; }
       .preface { width: min(92vw, 900px); display: flex; flex-direction: column; gap: 14px; }
       .preface-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -81,8 +83,10 @@
   <script>
     /* ===================== settings you may want to change ===================== */
     const SHUFFLE_OPTIONS = true;      // randomize answer order for each participant (used when questions are added)
-    const MAX_CHARS_PER_BOX = 130;     // a longer speech is moved on to the next box, at sentence ends
-    const MAX_SENTENCES_PER_BOX = 3;
+    const SPLIT_LONG_SPEECHES = false; // false: one speech = one box, shown as one paragraph (never cut across boxes)
+    const MERGE_SAME_SPEAKER = true;   // true: consecutive lines by the same speaker are shown together in one box
+    const MAX_CHARS_PER_BOX = 130;     // only used when SPLIT_LONG_SPEECHES = true
+    const MAX_SENTENCES_PER_BOX = 3;   // only used when SPLIT_LONG_SPEECHES = true
     const HIDE_ACTIONS = ['Press'];    // gameplay prompts are not displayed in the linear reading version
     /* =========================================================================== */
 
@@ -205,6 +209,15 @@
 
     // ---------- 3. Turn a segment into box-by-box screens ----------
     function buildScreens(items) {
+      if (MERGE_SAME_SPEAKER) {
+        const merged = [];
+        items.forEach(function (it) {
+          const last = merged[merged.length - 1];
+          if (it.kind === 'line' && last && last.kind === 'line' && last.speaker === it.speaker) last.text += ' ' + it.text;
+          else merged.push(Object.assign({}, it));
+        });
+        items = merged;
+      }
       const screens = [];
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
@@ -217,7 +230,7 @@
         } else if (it.kind === 'sys') {
           screens.push({ kind: 'sys', speaker: '', text: it.text });
         } else {
-          const pages = paginate(it.text);
+          const pages = SPLIT_LONG_SPEECHES ? paginate(it.text) : [[it.text]];
           pages.forEach(function (sents, p) {
             screens.push({ kind: it.kind, speaker: it.speaker, sents: sents, page: p + 1, pages: pages.length, text: sents.join(' ') });
           });
@@ -234,8 +247,9 @@
       if (s.kind === 'act') return '<div class="box act">' + esc(s.text) + '</div>';
       if (s.kind === 'sys') return '<div class="box sys">' + esc(s.text) + '</div>';
       const body = s.sents.map(function (x) { return '<p>' + fmt(x) + '</p>'; }).join('');
-      if (s.speaker) return '<div class="box talk"><div class="nametag">' + esc(DISPLAY_NAMES[s.speaker] || s.speaker) + '</div>' + body + '</div>';
-      return '<div class="box plain talk">' + body + '</div>';
+      const size = s.text.length > 500 ? ' xlong' : (s.text.length > 300 ? ' long' : '');
+      if (s.speaker) return '<div class="box talk' + size + '"><div class="nametag">' + esc(DISPLAY_NAMES[s.speaker] || s.speaker) + '</div>' + body + '</div>';
+      return '<div class="box plain talk' + size + '">' + body + '</div>';
     }
 
     function screenTrial(s, seg, idx) {
