@@ -443,7 +443,7 @@ const QUESTIONS = [
   {
     "id": "A2-2",
     "segment": 1,
-    "prompt": "When Larry first appears, he loudly says that he is guilty and demands the death sentence. How would you best describe his behavior?",
+    "prompt": "When Larry first appears, he says he is guilty and demands the death sentence. How would you best describe his behavior?",
     "options": [
       "Calm and serious, carefully explaining what happened",
       "Truly sorry and willing to accept the blame",
@@ -455,7 +455,7 @@ const QUESTIONS = [
   {
     "id": "A3-7",
     "segment": 1,
-    "prompt": "Larry screams that he is going to die, and Mia says it sounds like he wants to die. Phoenix answers \"Um, yeah\" and sighs. What does Phoenix's reaction suggest?",
+    "prompt": "Larry screams that he is going to die, and Mia says it sounds like he wants to die. Phoenix answers \"Um, yeah.\" What does Phoenix's reaction suggest?",
     "options": [
       "He is used to Larry acting this way",
       "He is deeply shocked by Larry's words",
@@ -467,7 +467,7 @@ const QUESTIONS = [
   {
     "id": "A3-4",
     "segment": 1,
-    "prompt": "When Phoenix cannot remember the name of the woman who was killed, Mia says she feels a migraine coming on and begs him to check the Court Record. What does Mia's reaction suggest?",
+    "prompt": "When Phoenix cannot remember the name of the woman who was killed, Mia tells him the victim's name is in the Court Record and to check it often. What does Mia's message suggest?",
     "options": [
       "She doubts that Phoenix is ready for court",
       "She is amused by Phoenix's mistake",
@@ -551,7 +551,7 @@ const QUESTIONS = [
   {
     "id": "A3-5",
     "segment": 2,
-    "prompt": "Payne says Sahwit simply forgot the time. The court answers that it finds that hard to believe. What does this reaction suggest?",
+    "prompt": "Payne says Sahwit simply forgot the time. The judge then asks Sahwit why he was so certain it was 1:00 PM. What does this suggest?",
     "options": [
       "The court is starting to doubt Sahwit's story",
       "The court thinks Payne spoke too quietly",
@@ -563,12 +563,12 @@ const QUESTIONS = [
   {
     "id": "A3-2",
     "segment": 2,
-    "prompt": "After Phoenix shows the Blackout Record to challenge Sahwit's claim that he heard the time from the television, the court says, \"The defense has a point.\" What does this reaction suggest?",
+    "prompt": "After Phoenix shows the Blackout Record to challenge Sahwit's claim that he heard the time from the television, the court says, \"The defense has a point,\" and asks Sahwit to explain. What does this reaction suggest?",
     "options": [
       "The court is siding with Payne on this issue",
       "The court is only acknowledging that Phoenix spoke",
       "The court is growing tired of the delay",
-      "The court now takes Phoenix's argument seriously"
+      "The court thinks Phoenix's argument is reasonable"
     ],
     "answer": 3
   },
@@ -722,18 +722,18 @@ const VOCAB_ITEMS = [
   {
     "word": "owe",
     "options": [
-      "to need to pay something back",
-      "to give something away for free",
-      "to lose something"
+      "to have to give back",
+      "to give as a gift",
+      "to take without asking"
     ],
     "answer": 0
   },
   {
     "word": "favor",
     "options": [
-      "A kind act",
-      "A payment",
-      "An opinion"
+      "a kind act",
+      "a rule",
+      "an opinion"
     ],
     "answer": 0
   },
@@ -831,7 +831,7 @@ const VOCAB_ITEMS = [
     "word": "sympathize",
     "options": [
       "feel sorry for",
-      "care about",
+      "feel proud of",
       "argue with"
     ],
     "answer": 0
@@ -948,8 +948,8 @@ const VOCAB_ITEMS = [
     "word": "nervous",
     "options": [
       "worried",
-      "excited",
-      "confused"
+      "bored",
+      "angry"
     ],
     "answer": 0
   },
@@ -967,7 +967,7 @@ const VOCAB_ITEMS = [
     "options": [
       "hopelessness",
       "anger",
-      "fear"
+      "surprise"
     ],
     "answer": 0
   },

@@ -10,15 +10,12 @@ const CONDITIONS = {
 // Item-level log: one record per question per participant (feeds TestResponses and Summary).
 const LOG = [];
 
-const SOURCE_JUDGMENT_OPTIONS = [
-  'Only from the text/dialogue',
-  'Only from the visuals (character expressions, animation)',
-  'Only from the sound (voice tone, sound effects)',
-  'From the text and the visuals',
-  'From the text and the sound',
-  'From the visuals and the sound',
-  'From all three: text, visuals, and sound',
-  "I'm not sure"
+// VN group only: after each A2/A3 question, participants rate how much each kind of cue helped (1-5, or 'not present').
+const CUES = [
+  { key: 'text',   label: 'The text and dialogue',                          allowNA: true  },
+  { key: 'visual', label: 'The visuals (character expressions, animation)', allowNA: true  },
+  { key: 'audio',  label: 'The sound (voice tone, sound effects)',          allowNA: true  },
+  { key: 'guess',  label: 'Common sense, or just guessing',                 allowNA: false }
 ];
 
 // Styles for plain pages + test pages (the Text page already has its own copy of these).
@@ -39,6 +36,12 @@ const COMMON_CSS = `
   .test-option { display: block; margin: 12px 0; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
   .test-option:hover { background: #f4f6f8; }
   .test-option input { margin-right: 8px; }
+  .rating-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 16px; }
+  .rating-table th, .rating-table td { padding: 8px 4px; text-align: center; border-bottom: 1px solid #e3e3e3; }
+  .rating-table th:first-child, .rating-table td:first-child { text-align: left; width: 38%; }
+  .rating-table th { font-weight: normal; color: #555; font-size: 14px; }
+  .rating-table input { transform: scale(1.25); cursor: pointer; }
+  .rating-scale-note { font-size: 14px; color: #666; margin: 4px 0 0; }
   .test-source-q { font-size: 20px; line-height: 1.5; margin: 32px 0 8px; padding-top: 18px; border-top: 1px solid #ddd; }
   .test-navigation { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
   .test-navigation button { font-size: 17px; padding: 9px 20px; border: 1px solid #555; border-radius: 6px; background: #f5f5f5; cursor: pointer; }
@@ -51,6 +54,8 @@ function injectCommonStyles() {
   st.textContent = COMMON_CSS;
   document.head.appendChild(st);
 }
+
+function num(v) { return v === null ? '' : (v === 'NA' ? 'NA' : Number(v)); }
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -84,7 +89,7 @@ function testBlock(jsPsych, items, phase, firstNumber, opts) {
       number: firstNumber + i
     };
   });
-  const st = prepared.map(function () { return { choice: null, source: null, ms: 0, changes: 0 }; });
+  const st = prepared.map(function () { return { choice: null, rate: { text: null, visual: null, audio: null, guess: null }, most: null, ms: 0, changes: 0 }; });
   let idx = 0, shownAt = 0, blockStart = 0;
 
   function leave() { st[idx].ms += performance.now() - shownAt; }
@@ -99,9 +104,20 @@ function testBlock(jsPsych, items, phase, firstNumber, opts) {
     });
     h += '</form>';
     if (needSrc) {
-      h += '<p class="test-source-q">What did you mainly use to decide on your answer?</p>';
-      SOURCE_JUDGMENT_OPTIONS.forEach(function (o, i) {
-        h += '<label class="test-option"><input type="radio" name="test-source" value="' + i + '"' + (s.source === i ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>';
+      h += '<p class="test-source-q">How much did each of the following help you decide on your answer?</p>' +
+           '<p class="rating-scale-note">1 = did not help at all &nbsp;&middot;&nbsp; 5 = helped a lot</p>' +
+           '<table class="rating-table"><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Not in this scene / did not notice</th></tr>';
+      CUES.forEach(function (c) {
+        h += '<tr><td>' + escapeHtml(c.label) + '</td>';
+        for (let v = 1; v <= 5; v++) {
+          h += '<td><input type="radio" name="rate-' + c.key + '" value="' + v + '"' + (s.rate[c.key] === String(v) ? ' checked' : '') + '></td>';
+        }
+        h += c.allowNA ? '<td><input type="radio" name="rate-' + c.key + '" value="NA"' + (s.rate[c.key] === 'NA' ? ' checked' : '') + '></td>' : '<td></td>';
+        h += '</tr>';
+      });
+      h += '</table><p class="test-source-q">Which one helped you the most?</p>';
+      CUES.forEach(function (c) {
+        h += '<label class="test-option"><input type="radio" name="test-most" value="' + c.key + '"' + (s.most === c.key ? ' checked' : '') + '> ' + escapeHtml(c.label) + '</label>';
       });
     }
     h += '<p class="test-navigation"><button type="button" id="test-back"' + ((idx === 0 || !allowBack) ? ' disabled' : '') + '>Back</button>' +
@@ -120,7 +136,11 @@ function testBlock(jsPsych, items, phase, firstNumber, opts) {
         reaction_time_ms: Math.round(s.ms),
         option_order: q.options.join(' | '),
         answer_changes: s.changes,
-        source_judgment: s.source === null ? '' : SOURCE_JUDGMENT_OPTIONS[s.source]
+        rating_text:   num(s.rate.text),
+        rating_visual: num(s.rate.visual),
+        rating_audio:  num(s.rate.audio),
+        rating_guess:  num(s.rate.guess),
+        most_helpful:  s.most === null ? '' : s.most
       };
       LOG.push(rec);
       return rec;
@@ -150,16 +170,32 @@ function testBlock(jsPsych, items, phase, firstNumber, opts) {
             s.choice = v;
           });
         });
-        root.querySelectorAll('input[name="test-source"]').forEach(function (el) {
-          el.addEventListener('change', function () { s.source = Number(el.value); });
+        CUES.forEach(function (c) {
+          root.querySelectorAll('input[name="rate-' + c.key + '"]').forEach(function (el) {
+            el.addEventListener('change', function () { s.rate[c.key] = el.value; });
+          });
+        });
+        root.querySelectorAll('input[name="test-most"]').forEach(function (el) {
+          el.addEventListener('change', function () { s.most = el.value; });
         });
         document.getElementById('test-back').addEventListener('click', function () {
           if (idx > 0) { leave(); idx--; draw(); }
         });
         document.getElementById('test-next').addEventListener('click', function () {
-          if (s.choice === null || (r.needSrc && s.source === null)) {
+          if (s.choice === null) {
             document.getElementById('test-error').textContent = 'Please select an answer before continuing.';
             return;
+          }
+          if (r.needSrc) {
+            const missing = CUES.some(function (c) { return s.rate[c.key] === null; }) || s.most === null;
+            if (missing) {
+              document.getElementById('test-error').textContent = 'Please rate every item and choose the one that helped most.';
+              return;
+            }
+            if (s.rate[s.most] === 'NA') {
+              document.getElementById('test-error').textContent = 'You marked that item as not in this scene, so it cannot be the one that helped most.';
+              return;
+            }
           }
           leave();
           if (idx < prepared.length - 1) { idx++; draw(); } else { finish(); }
