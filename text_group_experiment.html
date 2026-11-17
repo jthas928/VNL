@@ -85,6 +85,21 @@
     const SHUFFLE_OPTIONS = true;      // randomize answer order for each participant (used when questions are added)
     const SPLIT_LONG_SPEECHES = false; // false: one speech = one box, shown as one paragraph (never cut across boxes)
     const MERGE_SAME_SPEAKER = true;   // true: consecutive lines by the same speaker are shown together in one box
+    // Long speeches (over 250 characters) start a new box before any sentence that begins with one of these,
+    // so the page breaks follow the change of topic/context. A line that begins with one of these is also never
+    // merged into the previous box.
+    const PAGE_BREAK_BEFORE = [
+      'Our school had a saying', 'But I know better than anyone',          // Phoenix, opening narration
+      'Then I saw her lying there', 'I remember the time exactly',          // Sahwit, first testimony
+      'First, find contradictions',                                         // Mia, how to use the evidence
+      'Oh, but it was three hours off',                                     // Sahwit, "video" excuse
+      'Ask yourself',                                                       // Mia, hint about the clock
+      "The clock wasn't three hours slow", 'Proof enough for you',          // Phoenix, Paris explanation
+      'That day...',                                                        // Phoenix, what really happened
+      'We never really know',                                               // Mia, closing advice
+      'Well, I think our work here is done',                                // Mia, wrapping up
+      "I didn't know it then"                                               // Phoenix, closing narration
+    ];
     const MAX_CHARS_PER_BOX = 130;     // only used when SPLIT_LONG_SPEECHES = true
     const MAX_SENTENCES_PER_BOX = 3;   // only used when SPLIT_LONG_SPEECHES = true
     const HIDE_ACTIONS = ['Press'];    // gameplay prompts are not displayed in the linear reading version
@@ -208,12 +223,63 @@
     }
 
     // ---------- 3. Turn a segment into box-by-box screens ----------
+    function isThought(t) { return t.charAt(0) === '('; }          // (inner thoughts) are a different context from spoken lines
+    function startsBreak(t) { return PAGE_BREAK_BEFORE.some(function (b) { return t.indexOf(b) === 0; }); }
+    const STANDALONE = ['Hold it!', 'Objection!', 'Take that!'];     // shouts stay on a line of their own
+    function joinFragments(sents) {                                  // very short pieces ("I...", "Never.") join the next sentence
+      const out = [];
+      let carry = '';
+      sents.forEach(function (s) {
+        const t = carry ? carry + ' ' + s : s;
+        if (t.length < 14 && STANDALONE.indexOf(t) === -1) { carry = t; } else { out.push(t); carry = ''; }
+      });
+      if (carry) { if (out.length) out[out.length - 1] += ' ' + carry; else out.push(carry); }
+      return out;
+    }
+    function toUnits(text) {                                         // (inner thoughts) vs spoken text
+      const units = []; let i = 0, buf = '';
+      const pushSpeech = function () { if (buf.trim()) units.push({ thought: false, text: buf.trim() }); buf = ''; };
+      while (i < text.length) {
+        if (text.charAt(i) === '(') {
+          let depth = 0, j = i;
+          for (; j < text.length; j++) { if (text.charAt(j) === '(') depth++; else if (text.charAt(j) === ')' && --depth === 0) break; }
+          pushSpeech();
+          units.push({ thought: true, text: text.slice(i, j + 1).trim() });
+          i = j + 1;
+        } else { buf += text.charAt(i); i++; }
+      }
+      pushSpeech();
+      return units;
+    }
+    function splitByContext(text) {                                  // -> array of boxes, each an array of lines
+      const pages = [[]]; let lastThought = null;
+      toUnits(text).forEach(function (u) {
+        if (lastThought !== null && lastThought !== u.thought) pages.push([]);   // thought <-> speech = new context = new box
+        lastThought = u.thought;
+        const allow = !u.thought && u.text.length > 250;
+        // 1) manual context breaks first, 2) then join very short pieces inside each part
+        let parts = [[]];
+        if (!u.thought) {
+          splitSentences(u.text).forEach(function (s) {
+            if (allow && parts[parts.length - 1].length && startsBreak(s)) parts.push([]);
+            parts[parts.length - 1].push(s);
+          });
+          parts = parts.map(joinFragments);
+        } else { parts = [[u.text]]; }
+        parts.forEach(function (ps, k) {
+          if (k > 0) pages.push([]);
+          ps.forEach(function (s) { pages[pages.length - 1].push(s); });
+        });
+      });
+      return pages;
+    }
     function buildScreens(items) {
       if (MERGE_SAME_SPEAKER) {
         const merged = [];
         items.forEach(function (it) {
           const last = merged[merged.length - 1];
-          if (it.kind === 'line' && last && last.kind === 'line' && last.speaker === it.speaker) last.text += ' ' + it.text;
+          if (it.kind === 'line' && last && last.kind === 'line' && last.speaker === it.speaker &&
+              isThought(last.text) === isThought(it.text) && !startsBreak(it.text)) last.text += ' ' + it.text;
           else merged.push(Object.assign({}, it));
         });
         items = merged;
@@ -230,7 +296,7 @@
         } else if (it.kind === 'sys') {
           screens.push({ kind: 'sys', speaker: '', text: it.text });
         } else {
-          const pages = SPLIT_LONG_SPEECHES ? paginate(it.text) : [[it.text]];
+          const pages = SPLIT_LONG_SPEECHES ? paginate(it.text) : splitByContext(it.text);
           pages.forEach(function (sents, p) {
             screens.push({ kind: it.kind, speaker: it.speaker, sents: sents, page: p + 1, pages: pages.length, text: sents.join(' ') });
           });
@@ -247,7 +313,9 @@
       if (s.kind === 'act') return '<div class="box act">' + esc(s.text) + '</div>';
       if (s.kind === 'sys') return '<div class="box sys">' + esc(s.text) + '</div>';
       const body = s.sents.map(function (x) { return '<p>' + fmt(x) + '</p>'; }).join('');
-      const size = s.text.length > 500 ? ' xlong' : (s.text.length > 300 ? ' long' : '');
+      const lines = s.sents.reduce(function (a, x) { return a + Math.ceil(x.length / 50); }, 0);
+      const est = lines * 45 + (s.sents.length - 1) * 22 + 90;          // rough box height in px at the normal font size
+      const size = est > 640 ? ' xlong' : (est > 520 ? ' long' : '');
       if (s.speaker) return '<div class="box talk' + size + '"><div class="nametag">' + esc(DISPLAY_NAMES[s.speaker] || s.speaker) + '</div>' + body + '</div>';
       return '<div class="box plain talk' + size + '">' + body + '</div>';
     }
